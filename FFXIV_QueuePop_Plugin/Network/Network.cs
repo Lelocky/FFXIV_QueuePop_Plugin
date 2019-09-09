@@ -11,7 +11,7 @@ using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using NetFwTypeLib;
-using FFXIV_QueuePop_Plugin.Notifier;
+using System.Threading;
 
 namespace FFXIV_QueuePop_Plugin
 {
@@ -50,46 +50,46 @@ namespace FFXIV_QueuePop_Plugin
         private byte[] recvBuffer = new byte[0x20000];
         internal bool IsRunning { get; private set; } = false;
         private object lockAnalyse = new object();
-        private NotificationSender notificationSender;
 
-        internal void StartCapture(Process process, string ffxivstatsApiKey, string telegramChatId)
+        internal void StartCapture(Process process, CancellationToken cancellationToken)
         {
-            Task.Factory.StartNew(() =>
+            Task.Run(() =>
             {
                 try
                 {
-
-                    Log.Write(LogType.Info, "l-network-starting");
-
-                    if (IsRunning)
+                    if (!cancellationToken.IsCancellationRequested)
                     {
-                        Log.Write(LogType.Info, "l-network-error-already-started");
-                        return;
+                        Log.Write(LogType.Info, "l-network-starting");
+
+                        if (IsRunning)
+                        {
+                            Log.Write(LogType.Info, "l-network-error-already-started");
+                            return;
+                        }
+
+                        UpdateGameConnections(process);
+
+                        if (connections.Count < 2)
+                        {
+                            Log.Write(LogType.Info, "l-network-error-no-connection");
+                            return;
+                        }
+
+                        var localAddress = connections[0].localEndPoint.Address;
+
+
+                        socket = new Socket(AddressFamily.InterNetwork, SocketType.Raw, ProtocolType.IP);
+                        socket.Bind(new IPEndPoint(localAddress, 0));
+                        socket.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.HeaderIncluded, true);
+                        socket.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.AcceptConnection, true);
+                        socket.IOControl(IOControlCode.ReceiveAll, RCVALL_IPLEVEL, null);
+                        socket.ReceiveBufferSize = recvBuffer.Length * 4;
+
+                        socket.BeginReceive(recvBuffer, 0, recvBuffer.Length, 0, new AsyncCallback(OnReceive), null);
+                        IsRunning = true;
+
+                        Log.Write(LogType.Info, "l-network-started");
                     }
-
-                    UpdateGameConnections(process);
-
-                    if (connections.Count < 2)
-                    {
-                        Log.Write(LogType.Info, "l-network-error-no-connection");
-                        return;
-                    }
-
-                    var localAddress = connections[0].localEndPoint.Address;
-
-                    RegisterToFirewall();
-
-                    socket = new Socket(AddressFamily.InterNetwork, SocketType.Raw, ProtocolType.IP);
-                    socket.Bind(new IPEndPoint(localAddress, 0));
-                    socket.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.HeaderIncluded, true);
-                    socket.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.AcceptConnection, true);
-                    socket.IOControl(IOControlCode.ReceiveAll, RCVALL_IPLEVEL, null);
-                    socket.ReceiveBufferSize = recvBuffer.Length * 4;
-
-                    socket.BeginReceive(recvBuffer, 0, recvBuffer.Length, 0, new AsyncCallback(OnReceive), null);
-                    IsRunning = true;
-
-                    Log.Write(LogType.Info, "l-network-started");
                 }
                 catch (Exception ex)
                 {

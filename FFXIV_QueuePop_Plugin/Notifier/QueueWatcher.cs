@@ -14,48 +14,93 @@ namespace FFXIV_QueuePop_Plugin.Notifier
     {
         private Process FFXIVProcess;
         private Network networkWorker;
-        private Task networkTask;
-    
+        private CancellationTokenSource cancellationTokenSource;
+
         public void Start()
         {
             Log.Write(LogType.Info, "Starting QueueWatcher");
             networkWorker = new Network();
+            cancellationTokenSource = new CancellationTokenSource();
             FindFFXIVProcess();
-            StartQueueWatcher();   
+            QueueWatch(cancellationTokenSource.Token);
         }
 
-        private void StartQueueWatcher()
+        private Task<bool> QueueWatch(CancellationToken cancellationToken)
         {
-            Task.Factory.StartNew(() =>
+            Task<bool> task = null;
+            bool needRunning = true;
+
+            try
             {
-                while (true)
+                task = Task.Run(() =>
                 {
-                    Thread.Sleep(30 * 1000);
-
-                    if (FFXIVProcess == null || FFXIVProcess.HasExited)
+                    try
                     {
-                        FFXIVProcess = null;
-                    }
-                    else
-                    {
-                        // FFXIVProcess is alive
+                        while (needRunning)
+                        {
+                            if (cancellationToken.IsCancellationRequested)
+                            {
+                                Log.Write(LogType.Debug, "Cancellation Requested");
+                            }
 
-                        if (networkWorker.IsRunning)
-                        {
-                            networkWorker.UpdateGameConnections(FFXIVProcess);
-                        }
-                        else
-                        {
-                            networkWorker.StartCapture(FFXIVProcess, "", "");
+                            if (!cancellationToken.IsCancellationRequested)
+                            {
+                                Thread.Sleep(10 * 1000);
+
+                                if (FFXIVProcess == null || FFXIVProcess.HasExited)
+                                {
+                                    FindFFXIVProcess();
+                                }
+                                else
+                                {
+                                    // FFXIVProcess is alive
+                                    if (networkWorker.IsRunning)
+                                    {
+                                        networkWorker.UpdateGameConnections(FFXIVProcess);
+                                    }
+                                    else
+                                    {
+                                        networkWorker.StartCapture(FFXIVProcess, cancellationToken);
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                needRunning = false;
+                                Log.Write(LogType.Info, "Stopping QueueWatcher");
+                                throw new TaskCanceledException(task);
+                            }
                         }
                     }
-                }
-            });
+                    catch (TaskCanceledException taskCanceledException)
+                    {
+                        Log.Write(LogType.Info, "Task canceled", taskCanceledException);
+                    }
+
+                    return task;
+                });
+            }
+            catch (TaskCanceledException taskCanceledException)
+            {
+                Log.Write(LogType.Info, "Task canceled", taskCanceledException);
+            }
+
+
+
+            return task;
         }
 
         public void Stop()
         {
-            
+            Log.Write(LogType.Info, "Trying to stop QueueWatcher");
+
+            if (networkWorker != null)
+            {
+                networkWorker.StopCapture();
+            }
+
+            cancellationTokenSource.Cancel();
+            cancellationTokenSource.Dispose();  
         }
 
 
@@ -70,7 +115,7 @@ namespace FFXIV_QueuePop_Plugin.Notifier
             if (processes.Count == 0)
             {
                 Log.Write(LogType.Info, "l-process-found-nothing");
-                
+
             }
             else if (processes.Count >= 2)
             {
@@ -88,9 +133,6 @@ namespace FFXIV_QueuePop_Plugin.Notifier
 
             var name = $"{FFXIVProcess.ProcessName}:{FFXIVProcess.Id}";
             Log.Write(LogType.Info, "l-process-set-success " + name);
-
-          
-            networkWorker.StartCapture(FFXIVProcess, "", "");
         }
 
 

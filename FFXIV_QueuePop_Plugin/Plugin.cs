@@ -84,6 +84,7 @@ namespace FFXIV_QueuePop_Plugin
             this.txtGetURL.Name = "txtGetURL";
             this.txtGetURL.Size = new System.Drawing.Size(195, 20);
             this.txtGetURL.TabIndex = 8;
+            this.txtGetURL.Visible = false;
             // 
             // lblTextGetUrl
             // 
@@ -93,6 +94,7 @@ namespace FFXIV_QueuePop_Plugin
             this.lblTextGetUrl.Size = new System.Drawing.Size(52, 13);
             this.lblTextGetUrl.TabIndex = 7;
             this.lblTextGetUrl.Text = "Get URL:";
+            this.lblTextGetUrl.Visible = false;
             // 
             // lbTextMode
             // 
