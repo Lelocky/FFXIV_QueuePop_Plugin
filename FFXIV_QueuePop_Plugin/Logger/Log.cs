@@ -17,12 +17,12 @@ namespace FFXIV_QueuePop_Plugin.Logger
         public static void Write(LogType logType, Exception ex)
         {
 
-            _ = WriteToFile(string.Format("{0} - {1}:/nException/n {2}", DateTime.Now, logType, ex));
+            _ = WriteToFile(string.Format("{0} - {1}:\nException:\n{2}", DateTime.Now, logType, ex));
         }
 
         public static void Write(LogType logType, string Message, Exception ex)
         {
-           _ = WriteToFile(string.Format("{0} - {1}: {2}/nException/n {3}", DateTime.Now, logType, Message, ex));
+           _ = WriteToFile(string.Format("{0} - {1}: {2}\nException:\n {3}", DateTime.Now, logType, Message, ex));
         }
 
         private static async Task WriteToFile(string message)
@@ -39,23 +39,31 @@ namespace FFXIV_QueuePop_Plugin.Logger
             }
         }
 
-        private static bool CheckForLog(string logPath)
+        private static bool CheckForLog(string logFolderPath)
         {
-            if (!Directory.Exists(logPath))
+            if (!Directory.Exists(logFolderPath))
             {
-                Directory.CreateDirectory(logPath);
+                Directory.CreateDirectory(logFolderPath);
             }
 
-            if (!File.Exists(logPath + "/default.log"))
+            string logFilePath = logFolderPath + "/default.log";
+
+            if (!File.Exists(logFilePath))
             {
-                File.Create(logPath + "/default.log").Dispose();
+                File.Create(logFilePath).Dispose();
             }
             else
             {
-                //Check logsize and clear if large
+                long filesize = new FileInfo(logFilePath).Length;
+
+                if (filesize > 5000000)
+                {
+                    File.Delete(logFilePath);
+                    File.Create(logFilePath).Dispose();
+                }
             }
 
-            return File.Exists(logPath + "/default.log");
+            return File.Exists(logFilePath);
         }
     }
 }
